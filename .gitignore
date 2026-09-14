@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+uploads
+.DS_Store
+.wrangler
+.dev.vars*
+!.dev.vars.example
+worker-configuration.d.ts

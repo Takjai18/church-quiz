@@ -1,0 +1,37 @@
+{
+  "name": "church-quiz",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && wrangler dev",
+    "dev:local": "tsx watch server/index.ts",
+    "build": "tsc -p tsconfig.app.json --noEmit && vite build",
+    "start": "tsx server/index.ts",
+    "deploy": "npm run build && wrangler deploy",
+    "test": "tsx server/rooms.test.ts",
+    "test:sync": "tsx server/sync.test.ts",
+    "test:ui": "tsx server/ui.test.ts"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.3",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "wrangler": "^4.131.1"
+  }
+}
