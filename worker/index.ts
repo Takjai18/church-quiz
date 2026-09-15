@@ -70,6 +70,15 @@ export default {
       return json(await bankStub(env).snapshot());
     }
 
+    if (request.method === "POST" && url.pathname === "/api/bank/categories") {
+      const body = (await request.json().catch(() => ({}))) as { label?: string };
+      try {
+        return json(await bankStub(env).addCategory(String(body.label || "")));
+      } catch (err) {
+        return json({ error: err instanceof Error ? err.message : "新增失敗" }, 400);
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/api/bank/lineup") {
       const body = (await request.json().catch(() => ({}))) as { lineup?: Record<string, string> };
       return json(await bankStub(env).setLineup(body.lineup || {}));

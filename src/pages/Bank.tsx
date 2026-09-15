@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ASK_FOR_LABEL, CATEGORY_LABEL, cellKey } from "../../shared/labels";
-import { CATEGORIES, POINT_VALUES, type AskFor, type Category, type Points, type Question } from "../../shared/types";
+import { ASK_FOR_LABEL, categoryLabel, cellKey } from "../../shared/labels";
+import { DEFAULT_CATEGORIES, POINT_VALUES, type AskFor, type Category, type Points, type Question } from "../../shared/types";
 import { loadHostSession, saveLocalBank } from "../lib/storage";
 import type { BankSnapshot } from "../../shared/types";
 
@@ -26,6 +26,8 @@ export default function Bank() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [sortCat, setSortCat] = useState<Category | "all">("all");
+  const [pointFilter, setPointFilter] = useState<Record<string, Points | "all">>({});
+  const [newCat, setNewCat] = useState("");
 
   async function reload() {
     const res = await fetch("/api/bank");
@@ -39,19 +41,21 @@ export default function Bank() {
     void reload().catch((err: Error) => setError(err.message));
   }, []);
 
-  const spareList = useMemo(() => {
-    const catOrder = new Map(CATEGORIES.map((c, i) => [c, i]));
+  const catList = data?.categories?.length ? data.categories : DEFAULT_CATEGORIES;
+
+  const spareGroups = useMemo(() => {
     const ptsOrder = new Map(POINT_VALUES.map((p, i) => [p, i]));
-    const list = [...(data?.questions || [])].sort((a, b) => {
-      const c = (catOrder.get(a.category) ?? 0) - (catOrder.get(b.category) ?? 0);
-      if (c !== 0) return c;
-      const p = (ptsOrder.get(a.points) ?? 0) - (ptsOrder.get(b.points) ?? 0);
-      if (p !== 0) return p;
-      return a.prompt.localeCompare(b.prompt, "zh-Hant");
-    });
-    if (sortCat === "all") return list;
-    return list.filter((q) => q.category === sortCat);
-  }, [data, sortCat]);
+    const groups = catList
+      .filter((c) => sortCat === "all" || c.id === sortCat)
+      .map((c) => {
+        const pf = pointFilter[c.id] ?? "all";
+        const items = (data?.questions || [])
+          .filter((q) => q.category === c.id && (pf === "all" || q.points === pf))
+          .sort((a, b) => (ptsOrder.get(a.points) ?? 0) - (ptsOrder.get(b.points) ?? 0) || a.prompt.localeCompare(b.prompt, "zh-Hant"));
+        return { cat: c, items, pf };
+      });
+    return groups;
+  }, [data, sortCat, pointFilter, catList]);
 
   const byCell = useMemo(() => {
     const map: Record<string, Question[]> = {};
@@ -86,6 +90,25 @@ export default function Bank() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function addCategory(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setOk("");
+    const res = await fetch("/api/bank/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: newCat }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || "新增類別失敗");
+      return;
+    }
+    setData(body);
+    setNewCat("");
+    setOk("已新增類別");
   }
 
   async function remove(id: string) {
@@ -124,13 +147,13 @@ export default function Bank() {
     setOk("");
     const snap = await reload();
     if (!snap.selected) {
-      setError("請先喺「揀題」揀齊 12 格");
+      setError("請先喺「揀題」為每個要用嘅類別揀齊 10／30／50");
       return;
     }
     saveLocalBank("青年小組冰破", snap.selected);
     const session = loadHostSession();
     if (!session) {
-      setOk("已儲存揀題。返去主持台開房就會用呢 12 題。");
+      setOk(`已儲存揀題（${snap.selected.length} 題）。返去主持台開房就會用。`);
       return;
     }
     const res = await fetch(`/api/rooms/${session.roomCode}/intent`, {
@@ -139,7 +162,9 @@ export default function Bank() {
         "Content-Type": "application/json",
         "X-Host-Token": session.hostToken,
       },
-      body: JSON.stringify({ intent: { type: "loadBank", title: "青年小組冰破", questions: snap.selected } }),
+      body: JSON.stringify({
+        intent: { type: "loadBank", title: "青年小組冰破", questions: snap.selected, categories: snap.categories },
+      }),
     });
     const body = await res.json();
     if (!res.ok) {
@@ -168,7 +193,7 @@ export default function Bank() {
           入題（備用）
         </button>
         <button type="button" className={`btn ${tab === "pick" ? "primary" : "ghost"}`} onClick={() => setTab("pick")}>
-          揀題（出賽 12 格）
+          揀題（出賽）
         </button>
       </div>
 
@@ -186,9 +211,9 @@ export default function Bank() {
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {CATEGORY_LABEL[c]}
+                  {catList.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
                     </option>
                   ))}
                 </select>
@@ -282,53 +307,81 @@ export default function Bank() {
             </form>
           </section>
           <section className="panel">
-            <h2>備用題（{spareList.length}{sortCat === "all" ? `／${data?.questions.length ?? 0}` : ""}）</h2>
+            <h2>備用題（{data?.questions.length ?? 0}）</h2>
             <label>
-              按類別
+              類別
               <select value={sortCat} onChange={(e) => setSortCat(e.target.value as Category | "all")}>
-                <option value="all">全部（聖經 → 流行曲 → 韓劇 → 冷笑話）</option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_LABEL[c]}
+                <option value="all">全部類別</option>
+                {catList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
                   </option>
                 ))}
               </select>
             </label>
-            <ul className="bank-list">
-              {spareList.map((q, i) => {
-                const prev = spareList[i - 1];
-                const showHead = sortCat === "all" && q.category !== prev?.category;
-                return (
-                  <li key={q.id}>
-                    {showHead ? <p className="spare-head">{CATEGORY_LABEL[q.category]}</p> : null}
-                    <strong>
-                      {CATEGORY_LABEL[q.category]} {q.points}
-                    </strong>
-                    <span>{q.prompt}</span>
-                    <div className="choice-row">
-                      <button className="btn tiny" type="button" onClick={() => setForm({ ...q, askFor: q.askFor || "text" })}>
-                        改
-                      </button>
-                      <button className="btn tiny" type="button" onClick={() => void remove(q.id)}>
-                        刪
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+            <form className="choice-row" onSubmit={(e) => void addCategory(e)}>
+              <input
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                placeholder="新類別：詩歌、歷史、常識…"
+              />
+              <button className="btn" type="submit">
+                新增類別
+              </button>
+            </form>
+            {spareGroups.map(({ cat, items, pf }) => (
+              <div key={cat.id} className="spare-group">
+                <p className="spare-head">{cat.label}</p>
+                <div className="chip-row" role="group" aria-label={`${cat.label} 分數`}>
+                  {(["all", 10, 30, 50] as const).map((p) => (
+                    <button
+                      key={String(p)}
+                      type="button"
+                      className={`chip ${pf === p ? "on" : ""}`}
+                      onClick={() => setPointFilter((prev) => ({ ...prev, [cat.id]: p }))}
+                    >
+                      {p === "all" ? "全部" : `${p}分`}
+                    </button>
+                  ))}
+                </div>
+                <ul className="bank-list">
+                  {items.length ? (
+                    items.map((q) => (
+                      <li key={q.id}>
+                        <strong>
+                          {categoryLabel(q.category, catList)} {q.points}
+                        </strong>
+                        <span>{q.prompt}</span>
+                        <div className="choice-row">
+                          <button className="btn tiny" type="button" onClick={() => setForm({ ...q, askFor: q.askFor || "text" })}>
+                            改
+                          </button>
+                          <button className="btn tiny" type="button" onClick={() => void remove(q.id)}>
+                            刪
+                          </button>
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <li>
+                      <span>呢個篩選未有備用題</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            ))}
           </section>
         </div>
       ) : (
         <section className="panel">
-          <h2>揀今場 12 格</h2>
-          <p className="hint">每個類別每個分數揀一題出賽。其餘留喺資料庫備用。</p>
-          <div className="pick-grid">
-            {CATEGORIES.map((c) => (
-              <div key={c} className="pick-col">
-                <h3>{CATEGORY_LABEL[c]}</h3>
+          <h2>揀今場出賽題</h2>
+          <p className="hint">每個要用嘅類別揀齊 10／30／50 分。加咗詩歌、歷史等新類，揀齊三格就會上棋盤。</p>
+          <div className="pick-grid" style={{ gridTemplateColumns: `repeat(${Math.max(catList.length, 1)}, minmax(0, 1fr))` }}>
+            {catList.map((c) => (
+              <div key={c.id} className="pick-col">
+                <h3>{c.label}</h3>
                 {POINT_VALUES.map((p) => {
-                  const cell = cellKey(c, p);
+                  const cell = cellKey(c.id, p);
                   const options = byCell[cell] || [];
                   return (
                     <label key={cell}>
@@ -351,7 +404,9 @@ export default function Bank() {
               </div>
             ))}
           </div>
-          <p className={data?.selected ? "ok" : "error"}>{data?.selected ? "12 格已揀齊" : "未揀齊 12 格"}</p>
+          <p className={data?.selected ? "ok" : "error"}>
+            {data?.selected ? `已揀齊 ${data.selected.length / 3} 類（${data.selected.length} 題）` : "請為每個要用嘅類別揀齊 10／30／50"}
+          </p>
           <button className="btn primary huge-btn wide" type="button" disabled={!data?.selected} onClick={() => void applyToRoom()}>
             套用到主持台呢房
           </button>

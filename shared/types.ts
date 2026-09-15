@@ -1,4 +1,4 @@
-export type Category = "bible" | "pop" | "kdrama" | "pun";
+export type Category = string;
 export type Points = 10 | 30 | 50;
 export type Phase =
   | "lobby"
@@ -12,7 +12,19 @@ export type TeamId = "a" | "b";
 export type AskFor = "title" | "character" | "song" | "punchline" | "text";
 export type Sfx = "pick" | "correct" | "wrong" | "finish";
 
-export const CATEGORIES: Category[] = ["bible", "pop", "kdrama", "pun"];
+export interface CategoryDef {
+  id: Category;
+  label: string;
+}
+
+export const DEFAULT_CATEGORIES: CategoryDef[] = [
+  { id: "bible", label: "聖經" },
+  { id: "pop", label: "流行曲" },
+  { id: "kdrama", label: "韓劇" },
+  { id: "pun", label: "冷笑話" },
+];
+
+export const CATEGORIES: Category[] = DEFAULT_CATEGORIES.map((c) => c.id);
 export const POINT_VALUES: Points[] = [10, 30, 50];
 
 export interface Question {
@@ -64,6 +76,7 @@ export interface RoomState {
   teams: Record<TeamId, Team>;
   cells: Cell[];
   questions: Question[];
+  categories?: CategoryDef[];
   current: CurrentCell | null;
   deadline: number | null;
   answerRevealed: boolean;
@@ -81,6 +94,7 @@ export interface PublicRoom {
   teams: Record<TeamId, Team>;
   cells: Cell[];
   questions: PublicQuestion[];
+  categories?: CategoryDef[];
   current: CurrentCell | null;
   deadline: number | null;
   answerRevealed: boolean;
@@ -93,7 +107,7 @@ export interface PublicRoom {
 export type HostIntent =
   | { type: "setTeams"; teamA: string; teamB: string }
   | { type: "setTitle"; title: string }
-  | { type: "loadBank"; title?: string; questions: Question[] }
+  | { type: "loadBank"; title?: string; questions: Question[]; categories?: CategoryDef[] }
   | { type: "setQuestionImage"; questionId: string; imageUrl: string }
   | { type: "start"; startTeam: TeamId | "random" }
   | { type: "pickCell"; category: Category; points: Points }
@@ -117,4 +131,5 @@ export interface BankSnapshot {
   questions: Question[];
   lineup: Record<string, string>;
   selected: Question[] | null;
+  categories: CategoryDef[];
 }

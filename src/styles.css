@@ -181,6 +181,20 @@ textarea { resize: vertical; }
   font-size: 18px;
   letter-spacing: 0.08em;
 }
+.spare-group { margin-bottom: 18px; }
+.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+.chip {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: #222836;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chip.on { background: var(--gold); color: #1a1408; border-color: transparent; }
 .q-edit label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
 .q-edit textarea { min-height: 56px; }
 .json-fold { margin: 8px 0 16px; color: var(--muted); }

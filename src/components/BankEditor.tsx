@@ -21,7 +21,7 @@ export default function BankEditor({
       {questions.map((item) => (
         <li key={item.id} className="q-edit">
           <strong>
-            {CATEGORY_LABEL[item.category]} {item.points}
+            {CATEGORY_LABEL[item.category] || item.category} {item.points}
           </strong>
           <label>
             題型

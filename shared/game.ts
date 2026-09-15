@@ -1,5 +1,5 @@
 import {
-  CATEGORIES,
+  DEFAULT_CATEGORIES,
   POINT_VALUES,
   type Category,
   type HostIntent,
@@ -12,7 +12,7 @@ import {
   type TeamId,
 } from "./types";
 import { opponent } from "./labels";
-import { validateBank } from "./validate";
+import { categoriesInQuestions, validateBank } from "./validate";
 import { DEMO_QUESTIONS, DEMO_TITLE } from "./demo";
 
 export { DEMO_QUESTIONS, DEMO_TITLE };
@@ -56,7 +56,8 @@ function cloneQuestions(qs: Question[]): Question[] {
 }
 
 function cellsFromQuestions(questions: Question[]) {
-  return CATEGORIES.flatMap((category) =>
+  const cats = categoriesInQuestions(questions);
+  return cats.flatMap((category) =>
     POINT_VALUES.map((points) => {
       const q = questions.find((x) => x.category === category && x.points === points);
       return {
@@ -83,6 +84,7 @@ export function createRoomState(opts?: { teamA?: string; teamB?: string; code?: 
     },
     cells: cellsFromQuestions(questions),
     questions,
+    categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     current: null,
     deadline: null,
     answerRevealed: false,
@@ -137,6 +139,12 @@ export function applyIntent(room: RoomState, intent: HostIntent, now = Date.now(
       if (!v.ok) throw new Error(v.errors.join("；"));
       room.questions = cloneQuestions(intent.questions);
       room.cells = cellsFromQuestions(room.questions);
+      room.categories = intent.categories?.length
+        ? intent.categories.map((c) => ({ ...c }))
+        : categoriesInQuestions(room.questions).map((id) => ({
+            id,
+            label: DEFAULT_CATEGORIES.find((c) => c.id === id)?.label || id,
+          }));
       if (intent.title?.trim()) room.title = intent.title.trim();
       return room;
     }
@@ -248,7 +256,7 @@ export function applyIntent(room: RoomState, intent: HostIntent, now = Date.now(
       room.current = null;
       room.answerRevealed = false;
       room.deadline = null;
-      if (used >= 12) {
+      if (used >= room.cells.length) {
         room.phase = "finished";
         bumpSfx(room, "finish");
       } else {
@@ -320,6 +328,7 @@ export function toPublicRoom(room: RoomState): PublicRoom {
       b: { ...room.teams.b },
     },
     cells: room.cells.map((c) => ({ ...c })),
+    categories: room.categories?.map((c) => ({ ...c })),
     questions: room.questions.map((q) =>
       publicQuestion(q, showAnswer && room.current?.questionId === q.id),
     ),

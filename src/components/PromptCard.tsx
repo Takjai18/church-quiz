@@ -1,4 +1,4 @@
-import { ASK_FOR_LABEL, CATEGORY_LABEL, currentQuestion } from "../../shared/labels";
+import { ASK_FOR_LABEL, categoryLabel, currentQuestion, roomCategories } from "../../shared/labels";
 import type { PublicQuestion, PublicRoom, RoomState } from "../../shared/types";
 
 export default function PromptCard({
@@ -18,7 +18,7 @@ export default function PromptCard({
   return (
     <div className="prompt-card">
       <div className="prompt-meta">
-        <span className={`pill cat-${q.category}`}>{CATEGORY_LABEL[q.category]}</span>
+        <span className={`pill cat-${q.category}`}>{categoryLabel(q.category, roomCategories(room))}</span>
         <span className="pill gold">{q.points} 分</span>
         {ask ? <span className="pill">{ask}</span> : null}
       </div>

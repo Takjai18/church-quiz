@@ -69,7 +69,12 @@ export default function Host() {
           const snap = await fetch("/api/bank").then((r) => r.json());
           if (snap.selected?.length === 12) {
             appliedLocal.current = true;
-            getSocket().emit("host", { type: "loadBank", title: "青年小組冰破", questions: snap.selected });
+            getSocket().emit("host", {
+              type: "loadBank",
+              title: "青年小組冰破",
+              questions: snap.selected,
+              categories: snap.categories,
+            });
             setDraftQs(snap.selected.map((q: Question) => ({ ...q, accept: [...q.accept] })));
             return;
           }

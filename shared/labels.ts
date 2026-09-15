@@ -1,11 +1,47 @@
-import type { AskFor, Category, Phase, PublicRoom, RoomState, TeamId } from "./types";
+import { DEFAULT_CATEGORIES, type AskFor, type Category, type CategoryDef, type PublicRoom, type RoomState, type TeamId } from "./types";
 
-export const CATEGORY_LABEL: Record<Category, string> = {
-  bible: "聖經",
-  pop: "流行曲",
-  kdrama: "韓劇",
-  pun: "冷笑話",
-};
+export const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
+  DEFAULT_CATEGORIES.map((c) => [c.id, c.label]),
+);
+
+export function categoryLabel(id: Category, extras?: CategoryDef[]): string {
+  const hit = extras?.find((c) => c.id === id);
+  if (hit) return hit.label;
+  return CATEGORY_LABEL[id] || id;
+}
+
+export function roomCategories(room: PublicRoom | RoomState): CategoryDef[] {
+  if (room.categories?.length) return room.categories;
+  const ids: Category[] = [];
+  for (const cell of room.cells) {
+    if (!ids.includes(cell.category)) ids.push(cell.category);
+  }
+  return ids.map((id) => ({ id, label: categoryLabel(id) }));
+}
+
+export function slugCategory(label: string): string {
+  const t = label.trim();
+  const known = DEFAULT_CATEGORIES.find((c) => c.label === t);
+  if (known) return known.id;
+  const extra: Record<string, string> = {
+    詩歌: "hymn",
+    聖詩: "hymn",
+    歷史: "history",
+    常識: "trivia",
+    時事: "current",
+  };
+  if (extra[t]) return extra[t];
+  const ascii = t
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  if (ascii.length >= 2) return ascii;
+  let n = 0;
+  for (const ch of t) n += ch.charCodeAt(0);
+  return `c${n.toString(36)}`;
+}
 
 export const ASK_FOR_LABEL: Record<AskFor, string> = {
   title: "請答劇名",

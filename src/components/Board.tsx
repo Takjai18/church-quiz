@@ -1,5 +1,5 @@
-import { CATEGORIES, POINT_VALUES, type Category, type Points, type PublicRoom, type RoomState } from "../../shared/types";
-import { CATEGORY_LABEL } from "../../shared/labels";
+import { POINT_VALUES, type Category, type Points, type PublicRoom, type RoomState } from "../../shared/types";
+import { categoryLabel, roomCategories } from "../../shared/labels";
 
 export default function Board({
   room,
@@ -10,18 +10,25 @@ export default function Board({
   interactive?: boolean;
   onPick?: (category: Category, points: Points) => void;
 }) {
+  const cats = roomCategories(room);
   const currentKey = room.current ? `${room.current.category}-${room.current.points}` : "";
   const canPick = interactive && room.phase === "board";
 
   return (
-    <div className="board" role="grid" aria-label="題目板">
-      {CATEGORIES.map((c) => (
-        <div key={c} className={`board-h cat-${c}`}>
-          {CATEGORY_LABEL[c]}
+    <div
+      className="board"
+      role="grid"
+      aria-label="題目板"
+      style={{ gridTemplateColumns: `repeat(${Math.max(cats.length, 1)}, minmax(0, 1fr))` }}
+    >
+      {cats.map((c) => (
+        <div key={c.id} className={`board-h cat-${c.id}`}>
+          {c.label}
         </div>
       ))}
       {POINT_VALUES.map((points) =>
-        CATEGORIES.map((category) => {
+        cats.map((cat) => {
+          const category = cat.id;
           const cell = room.cells.find((x) => x.category === category && x.points === points);
           const used = Boolean(cell?.used);
           const key = `${category}-${points}`;

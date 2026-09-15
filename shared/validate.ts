@@ -1,7 +1,6 @@
-import { CATEGORIES, POINT_VALUES, type BankValidation, type Category, type Points, type Question } from "./types";
-import { CATEGORY_LABEL, cellKey } from "./labels";
+import { POINT_VALUES, type BankValidation, type Category, type Points, type Question } from "./types";
+import { categoryLabel, cellKey } from "./labels";
 
-const CATS = new Set<string>(CATEGORIES);
 const PTS = new Set<number>(POINT_VALUES);
 
 export function normalizeQuestion(raw: unknown, index: number): Question {
@@ -9,10 +8,10 @@ export function normalizeQuestion(raw: unknown, index: number): Question {
     throw new Error(`第 ${index + 1} 題格式無效`);
   }
   const q = raw as Record<string, unknown>;
-  const category = String(q.category ?? "");
+  const category = String(q.category ?? "").trim();
   const points = Number(q.points);
-  if (!CATS.has(category)) {
-    throw new Error(`第 ${index + 1} 題類別無效：${category}`);
+  if (!category) {
+    throw new Error(`第 ${index + 1} 題缺少類別`);
   }
   if (!PTS.has(points)) {
     throw new Error(`第 ${index + 1} 題分數無效：${q.points}`);
@@ -38,31 +37,48 @@ export function normalizeQuestion(raw: unknown, index: number): Question {
   };
 }
 
+export function categoriesInQuestions(questions: Question[]): Category[] {
+  const ids: Category[] = [];
+  for (const q of questions) {
+    if (!ids.includes(q.category)) ids.push(q.category);
+  }
+  return ids;
+}
+
 export function validateBank(questions: Question[]): BankValidation {
   const errors: string[] = [];
   const missing: string[] = [];
-  if (questions.length !== 12) {
-    errors.push(`需要剛好 12 題，而家有 ${questions.length} 題`);
+  const cats = categoriesInQuestions(questions);
+  const expected = cats.length * POINT_VALUES.length;
+  if (!cats.length) {
+    errors.push("未有類別");
+  }
+  if (questions.length !== expected) {
+    errors.push(`需要剛好 ${expected} 題（${cats.length} 類 × 3 分值），而家有 ${questions.length} 題`);
   }
   const seen = new Map<string, Question>();
   for (const q of questions) {
     const key = cellKey(q.category, q.points);
     if (seen.has(key)) {
-      errors.push(`重複格子：${CATEGORY_LABEL[q.category]} ${q.points}`);
+      errors.push(`重複格子：${categoryLabel(q.category)} ${q.points}`);
     }
     seen.set(key, q);
   }
-  for (const c of CATEGORIES) {
+  for (const c of cats) {
     for (const p of POINT_VALUES) {
       if (!seen.has(cellKey(c, p))) {
-        missing.push(`${CATEGORY_LABEL[c]} ${p}`);
+        missing.push(`${categoryLabel(c)} ${p}`);
       }
     }
   }
   if (missing.length) {
     errors.push(`缺少：${missing.join("、")}`);
   }
-  return { ok: errors.length === 0 && missing.length === 0 && questions.length === 12, errors, missing };
+  return {
+    ok: errors.length === 0 && missing.length === 0 && questions.length === expected && expected > 0,
+    errors,
+    missing,
+  };
 }
 
 export function parseBankJson(text: string): { title?: string; questions: Question[] } {

@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { DEMO_QUESTIONS } from "../shared/demo";
-import { CATEGORIES, POINT_VALUES, type BankSnapshot, type Category, type Points, type Question } from "../shared/types";
-import { cellKey } from "../shared/labels";
+import { DEFAULT_CATEGORIES, POINT_VALUES, type BankSnapshot, type Category, type CategoryDef, type Points, type Question } from "../shared/types";
+import { cellKey, slugCategory } from "../shared/labels";
 import { normalizeQuestion, validateBank } from "../shared/validate";
 
 function rowToQuestion(row: Record<string, unknown>): Question {
@@ -55,10 +55,30 @@ export class QuizBank extends DurableObject<Env> {
           data BLOB NOT NULL
         )
       `);
+      ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS categories (
+          id TEXT PRIMARY KEY,
+          label TEXT NOT NULL,
+          sort INTEGER NOT NULL
+        )
+      `);
     });
   }
 
+  private listCategories(): CategoryDef[] {
+    const rows = this.ctx.storage.sql
+      .exec<{ id: string; label: string }>("SELECT id, label FROM categories ORDER BY sort, id")
+      .toArray();
+    if (rows.length) return rows;
+    for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
+      const c = DEFAULT_CATEGORIES[i]!;
+      this.ctx.storage.sql.exec("INSERT INTO categories (id, label, sort) VALUES (?, ?, ?)", c.id, c.label, i);
+    }
+    return DEFAULT_CATEGORIES.map((c) => ({ ...c }));
+  }
+
   private seedIfEmpty() {
+    this.listCategories();
     const count = this.ctx.storage.sql.exec<{ n: number }>("SELECT COUNT(*) AS n FROM questions").one();
     if ((count?.n ?? 0) > 0) return;
     const now = Date.now();
@@ -91,6 +111,7 @@ export class QuizBank extends DurableObject<Env> {
 
   async snapshot(): Promise<BankSnapshot> {
     this.seedIfEmpty();
+    const categories = this.listCategories();
     const questions = this.ctx.storage.sql
       .exec<Record<string, unknown>>("SELECT * FROM questions ORDER BY category, points, createdAt")
       .toArray()
@@ -99,13 +120,27 @@ export class QuizBank extends DurableObject<Env> {
     for (const row of this.ctx.storage.sql.exec<{ cell: string; questionId: string }>("SELECT cell, questionId FROM lineup").toArray()) {
       lineup[row.cell] = row.questionId;
     }
-    const selectedIds = CATEGORIES.flatMap((c) => POINT_VALUES.map((p) => lineup[cellKey(c, p)]));
-    const selected =
-      selectedIds.every(Boolean) && selectedIds.length === 12
-        ? selectedIds.map((id) => questions.find((q) => q.id === id)).filter((q): q is Question => Boolean(q))
-        : null;
-    const ok = selected ? validateBank(selected).ok : false;
-    return { questions, lineup, selected: ok && selected && selected.length === 12 ? selected : null };
+    const selected: Question[] = [];
+    for (const c of categories) {
+      const ids = POINT_VALUES.map((p) => lineup[cellKey(c.id, p)]);
+      if (!ids.every(Boolean)) continue;
+      const qs = ids.map((id) => questions.find((q) => q.id === id));
+      if (qs.every(Boolean)) selected.push(...(qs as Question[]));
+    }
+    const ok = selected.length > 0 && validateBank(selected).ok;
+    return { questions, lineup, categories, selected: ok ? selected : null };
+  }
+
+  async addCategory(label: string) {
+    this.seedIfEmpty();
+    const name = label.trim();
+    if (!name) throw new Error("請輸入類別名稱");
+    const id = slugCategory(name);
+    const exists = this.ctx.storage.sql.exec<{ id: string }>("SELECT id FROM categories WHERE id = ?", id).toArray()[0];
+    if (exists) throw new Error("呢個類別已經有");
+    const max = this.ctx.storage.sql.exec<{ n: number }>("SELECT COALESCE(MAX(sort), -1) AS n FROM categories").one();
+    this.ctx.storage.sql.exec("INSERT INTO categories (id, label, sort) VALUES (?, ?, ?)", id, name, (max?.n ?? -1) + 1);
+    return this.snapshot();
   }
 
   async upsertQuestion(raw: unknown): Promise<Question> {
@@ -141,9 +176,10 @@ export class QuizBank extends DurableObject<Env> {
   async setLineup(lineup: Record<string, string>) {
     this.seedIfEmpty();
     this.ctx.storage.sql.exec("DELETE FROM lineup");
-    for (const c of CATEGORIES) {
+    const cats = this.listCategories();
+    for (const c of cats) {
       for (const p of POINT_VALUES) {
-        const key = cellKey(c, p);
+        const key = cellKey(c.id, p);
         const qid = lineup[key];
         if (qid) this.ctx.storage.sql.exec("INSERT INTO lineup (cell, questionId) VALUES (?, ?)", key, qid);
       }
