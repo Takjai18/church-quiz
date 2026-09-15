@@ -2,9 +2,12 @@
 
 繁體中文兩隊冰破遊戲：主持喺電腦開房，TV 投影大螢幕，手機用房號旁觀。唔使登入、唔使撳鈴。
 
+**正式公開網（已認領 Cloudflare 帳戶，永久）：**  
+https://church-quiz.deciduous-crayfish.workers.dev/
+
 ## 公開網站（Cloudflare）
 
-呢個遊戲已經 deploy 喺 **Cloudflare Workers**，任何人用瀏覽器就可以開，**唔使 Cloudflare Access、唔使登入**。
+任何人用瀏覽器就可以開，**唔使 Cloudflare Access、唔使登入**。
 
 | 頁面 | 網址 |
 | --- | --- |
@@ -39,8 +42,16 @@ npx wrangler dev
 
 ## 再 deploy 去 Cloudflare
 
+第一次喺呢部電腦 deploy，先登入你已認領嘅帳戶：
+
 ```bash
-npm run deploy
+npx wrangler login
 ```
 
-需要已登入嘅 Cloudflare 帳戶（`npx wrangler login`）。免費 Workers 方案就夠用。
+之後每次更新：
+
+```bash
+npm run ship
+```
+
+會 **push 最新 code 去 GitHub**（`main`），再 build 同 deploy 去而家呢個公開網。唔好再用 `wrangler deploy --temporary`，否則會開一條新嘅臨時網，過陣又會消失。

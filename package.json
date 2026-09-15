@@ -9,6 +9,7 @@
     "build": "tsc -p tsconfig.app.json --noEmit && vite build",
     "start": "tsx server/index.ts",
     "deploy": "npm run build && wrangler deploy",
+    "ship": "bash scripts/ship.sh",
     "test": "tsx server/rooms.test.ts",
     "test:sync": "tsx server/sync.test.ts",
     "test:ui": "tsx server/ui.test.ts"
