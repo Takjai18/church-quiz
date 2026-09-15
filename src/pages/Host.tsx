@@ -9,15 +9,18 @@ import Stage from "../components/Stage";
 import Timer from "../components/Timer";
 import { getSocket } from "../lib/socket";
 import { playSfx, unlockAudio } from "../lib/sfx";
+import BankEditor from "../components/BankEditor";
 import {
   clearHostSession,
   loadHostSession,
   loadHostView,
+  loadLocalBank,
   saveHostSession,
   saveHostView,
+  saveLocalBank,
   type HostView,
 } from "../lib/storage";
-import { CATEGORY_LABEL, currentQuestion, statusLine } from "../../shared/labels";
+import { currentQuestion, statusLine } from "../../shared/labels";
 import { parseBankJson, validateBank } from "../../shared/validate";
 import { DEMO_QUESTIONS, DEMO_TITLE } from "../../shared/game";
 import type { Category, HostIntent, Points, Question, RoomState, TeamId } from "../../shared/types";
@@ -35,7 +38,9 @@ export default function Host() {
   const [copied, setCopied] = useState(false);
   const [bankError, setBankError] = useState("");
   const [view, setView] = useState<HostView>(() => loadHostView());
+  const [draftQs, setDraftQs] = useState<Question[] | null>(null);
   const lastSfx = useRef(-1);
+  const appliedLocal = useRef(false);
 
   function switchView(next: HostView) {
     setView(next);
@@ -57,11 +62,22 @@ export default function Host() {
       setTeamA(payload.room.teams.a.name);
       setTeamB(payload.room.teams.b.name);
       setError("");
+      const saved = loadLocalBank();
+      if (saved && !appliedLocal.current) {
+        appliedLocal.current = true;
+        getSocket().emit("host", { type: "loadBank", title: saved.title, questions: saved.questions });
+        setDraftQs(saved.questions.map((q) => ({ ...q, accept: [...q.accept] })));
+      } else {
+        setDraftQs(payload.room.questions.map((q) => ({ ...q, accept: [...q.accept] })));
+      }
     };
     const onState = (next: RoomState) => {
       setRoom(next);
       setTeamA(next.teams.a.name);
       setTeamB(next.teams.b.name);
+      if (next.phase === "lobby") {
+        setDraftQs((prev) => prev ?? next.questions.map((q) => ({ ...q, accept: [...q.accept] })));
+      }
       if (next.sfx && next.sfxId !== lastSfx.current) {
         lastSfx.current = next.sfxId;
         playSfx(next.sfx, next.sfxId);
@@ -106,10 +122,52 @@ export default function Host() {
   function newRoom() {
     clearHostSession();
     setRoom(null);
+    setDraftQs(null);
+    appliedLocal.current = false;
     getSocket().emit("create", { teamA, teamB });
   }
 
-  const bank = useMemo(() => (room ? validateBank(room.questions) : null), [room]);
+  function saveDraft(questions: Question[], title?: string) {
+    const v = validateBank(questions);
+    if (!v.ok) {
+      setBankError(v.errors.join("；"));
+      setError(v.errors.join("；"));
+      return false;
+    }
+    setBankError("");
+    setError("");
+    saveLocalBank(title || room?.title || DEMO_TITLE, questions);
+    send({ type: "loadBank", title: title || room?.title, questions });
+    return true;
+  }
+
+  async function uploadQuestionImage(questionId: string, file: File) {
+    if (!room) return;
+    const dataUrl = await readDataUrl(file);
+    const session = loadHostSession();
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Host-Token": session?.hostToken || "",
+      },
+      body: JSON.stringify({ dataUrl, roomCode: room.code }),
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      setError(body.error || "上傳失敗");
+      return;
+    }
+    setDraftQs((prev) =>
+      (prev || []).map((q) => (q.id === questionId ? { ...q, imageUrl: body.url as string } : q)),
+    );
+    send({ type: "setQuestionImage", questionId, imageUrl: body.url });
+  }
+
+  const bank = useMemo(
+    () => (draftQs ? validateBank(draftQs) : room ? validateBank(room.questions) : null),
+    [draftQs, room],
+  );
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const qrOrigin =
@@ -248,139 +306,71 @@ export default function Host() {
 
           <section className="panel">
             <h2>題庫</h2>
-            <p className="hint">示範 12 題可之後再改；韓劇圖而家就可以上傳或貼網址。</p>
+            <p className="hint">直接改題目、答案、題型；韓劇可以上傳劇照。儲存後呢部電腦再開新房都會用返。</p>
             <p className={bank?.ok && !bankError ? "ok" : "error"}>
-              {bankError || (bank?.ok ? "內建／已載入題庫完整（12 格）" : bank?.errors.join("；"))}
+              {bankError || (bank?.ok ? "12 格完整" : bank?.errors.join("；"))}
             </p>
-            <textarea
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              placeholder='貼上 {"title":"青年小組冰破","questions":[ ...12題 ]}'
-              rows={8}
-            />
+            {draftQs ? (
+              <BankEditor questions={draftQs} onChange={setDraftQs} onUploadImage={uploadQuestionImage} />
+            ) : null}
             <div className="choice-row">
               <button
-                className="btn"
+                className="btn primary"
                 type="button"
-                onClick={() => {
-                  try {
-                    const parsed = parseBankJson(jsonText);
-                    const v = validateBank(parsed.questions);
-                    if (!v.ok) {
-                      setBankError(v.errors.join("；"));
-                      setError(v.errors.join("；"));
-                      return;
-                    }
-                    setBankError("");
-                    send({ type: "loadBank", title: parsed.title, questions: parsed.questions });
-                  } catch (err) {
-                    const msg = err instanceof Error ? err.message : "JSON 無效";
-                    setBankError(msg);
-                    setError(msg);
-                  }
-                }}
+                onClick={() => draftQs && saveDraft(draftQs)}
               >
-                套用 JSON
+                儲存題庫
               </button>
-              <label className="btn file-btn">
-                上傳 JSON
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  hidden
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const text = await file.text();
-                    setJsonText(text);
-                    try {
-                      const parsed = parseBankJson(text);
-                      const v = validateBank(parsed.questions);
-                      if (!v.ok) {
-                        setBankError(v.errors.join("；"));
-                        setError(v.errors.join("；"));
-                        return;
-                      }
-                      setBankError("");
-                      send({ type: "loadBank", title: parsed.title, questions: parsed.questions });
-                    } catch (err) {
-                      const msg = err instanceof Error ? err.message : "JSON 無效";
-                      setBankError(msg);
-                      setError(msg);
-                    }
-                  }}
-                />
-              </label>
-            </div>
-            <ul className="bank-list">
-              {room.questions.map((item) => (
-                <li key={item.id}>
-                  <strong>
-                    {CATEGORY_LABEL[item.category]} {item.points}
-                  </strong>
-                  <span>{item.prompt}</span>
-                  {item.category === "kdrama" ? (
-                    <div className="img-edit">
-                      {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <em>未有圖</em>}
-                      <input
-                        placeholder="圖片網址"
-                        defaultValue={item.imageUrl?.startsWith("/kdrama") ? "" : item.imageUrl}
-                        onBlur={(e) => {
-                          const url = e.target.value.trim();
-                          if (url) send({ type: "setQuestionImage", questionId: item.id, imageUrl: url });
-                        }}
-                      />
-                      <label className="btn tiny">
-                        上傳劇照
-                        <input
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            const dataUrl = await readDataUrl(file);
-                            const session = loadHostSession();
-                            const res = await fetch("/api/upload", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                                "X-Host-Token": session?.hostToken || "",
-                              },
-                              body: JSON.stringify({ dataUrl, roomCode: room.code }),
-                            });
-                            const body = await res.json();
-                            if (!res.ok) {
-                              setError(body.error || "上傳失敗");
-                              return;
-                            }
-                            send({ type: "setQuestionImage", questionId: item.id, imageUrl: body.url });
-                          }}
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            <div className="choice-row">
               <button
                 className="btn"
                 type="button"
                 onClick={() => {
                   setBankError("");
                   setError("");
-                  send({ type: "loadBank", title: DEMO_TITLE, questions: DEMO_QUESTIONS });
+                  setDraftQs(DEMO_QUESTIONS.map((q) => ({ ...q, accept: [...q.accept] })));
+                  saveDraft(DEMO_QUESTIONS, DEMO_TITLE);
                 }}
               >
                 用回示範題庫
               </button>
             </div>
+            <details className="json-fold">
+              <summary>進階：貼 JSON</summary>
+              <textarea
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
+                placeholder='{"title":"青年小組冰破","questions":[ ...12題 ]}'
+                rows={6}
+              />
+              <div className="choice-row">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const parsed = parseBankJson(jsonText);
+                      const v = validateBank(parsed.questions);
+                      if (!v.ok) {
+                        setBankError(v.errors.join("；"));
+                        return;
+                      }
+                      setDraftQs(parsed.questions);
+                      saveDraft(parsed.questions, parsed.title);
+                    } catch (err) {
+                      setBankError(err instanceof Error ? err.message : "JSON 無效");
+                    }
+                  }}
+                >
+                  套用 JSON
+                </button>
+              </div>
+            </details>
             <button
               className="btn primary wide huge-btn"
               type="button"
               disabled={!bank?.ok || Boolean(bankError)}
               onClick={() => {
+                if (draftQs && !saveDraft(draftQs)) return;
                 send({ type: "setTeams", teamA, teamB });
                 send({ type: "start", startTeam });
                 switchView("game");

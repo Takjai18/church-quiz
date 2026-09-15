@@ -155,7 +155,7 @@ textarea { resize: vertical; }
 .code-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .qr-wrap { margin: 12px 0; }
 .choice-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 16px; }
-.bank-list { list-style: none; padding: 0; margin: 0 0 16px; max-height: 360px; overflow: auto; }
+.bank-list { list-style: none; padding: 0; margin: 0 0 16px; max-height: 520px; overflow: auto; }
 .bank-list li {
   border-top: 1px solid var(--line);
   padding: 10px 0;
@@ -163,6 +163,10 @@ textarea { resize: vertical; }
   gap: 4px;
 }
 .bank-list strong { color: var(--gold); }
+.q-edit label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.q-edit textarea { min-height: 56px; }
+.json-fold { margin: 8px 0 16px; color: var(--muted); }
+.json-fold summary { cursor: pointer; margin-bottom: 8px; }
 .img-edit { display: grid; grid-template-columns: 72px 1fr auto; gap: 8px; align-items: center; }
 .img-edit img { width: 72px; height: 48px; object-fit: cover; border-radius: 6px; }
 
