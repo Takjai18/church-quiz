@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import Board from "../components/Board";
+import GameSetup, { buildGamePayload, defaultCatSetup, type CatSetup } from "../components/GameSetup";
 import JudgeBar from "../components/JudgeBar";
 import MuteButton from "../components/MuteButton";
 import PromptCard from "../components/PromptCard";
@@ -21,7 +22,7 @@ import {
 } from "../lib/storage";
 import { currentQuestion, statusLine } from "../../shared/labels";
 import { validateBank } from "../../shared/validate";
-import type { Category, HostIntent, Points, Question, RoomState, TeamId } from "../../shared/types";
+import type { BankSnapshot, HostIntent, Question, RoomState, TeamId } from "../../shared/types";
 
 type Info = { lan: string[]; origin: string };
 
@@ -36,6 +37,8 @@ export default function Host() {
   const [bankError, setBankError] = useState("");
   const [view, setView] = useState<HostView>(() => loadHostView());
   const [draftQs, setDraftQs] = useState<Question[] | null>(null);
+  const [bankSnap, setBankSnap] = useState<BankSnapshot | null>(null);
+  const [setup, setSetup] = useState<CatSetup[]>([]);
   const lastSfx = useRef(-1);
   const appliedLocal = useRef(false);
 
@@ -49,6 +52,13 @@ export default function Host() {
       .then((r) => r.json())
       .then(setInfo)
       .catch(() => undefined);
+    void fetch("/api/bank")
+      .then((r) => r.json())
+      .then((snap: BankSnapshot) => {
+        setBankSnap(snap);
+        setSetup((prev) => (prev.length ? prev : defaultCatSetup(snap.categories || [])));
+      })
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -59,6 +69,10 @@ export default function Host() {
       setTeamA(payload.room.teams.a.name);
       setTeamB(payload.room.teams.b.name);
       setError("");
+      if (payload.room.phase === "lobby") {
+        setView("admin");
+        saveHostView("admin");
+      }
       void (async () => {
         if (appliedLocal.current) return;
         try {
@@ -133,6 +147,22 @@ export default function Host() {
     unlockAudio();
     setError("");
     getSocket().emit("host", intent);
+  }
+
+  function startGame() {
+    send({ type: "setTeams", teamA, teamB });
+    if (setup.some((c) => c.on) && bankSnap) {
+      const payload = buildGamePayload(setup, bankSnap);
+      const need = setup.filter((c) => c.on).reduce((n, c) => n + c.count, 0);
+      if (payload.slots.length < need) {
+        setError("備用題唔夠，請去題庫入多啲或減少題數");
+        switchView("admin");
+        return;
+      }
+      send({ type: "configureGame", ...payload });
+    }
+    send({ type: "start", startTeam });
+    switchView("game");
   }
 
   function newRoom() {
@@ -216,19 +246,11 @@ export default function Host() {
         <Stage
           room={room}
           interactive={room.phase === "board"}
-          onPick={(category, points) => send({ type: "pickCell", category, points })}
+          onPick={(cell) => send({ type: "pickCell", category: cell.category, points: cell.points, cellId: cell.id, slot: cell.slot })}
           showAnswer={room.answerRevealed}
           footer={
             room.phase === "lobby" ? (
-              <button
-                className="btn primary wide huge-btn"
-                type="button"
-                disabled={!bank?.ok || Boolean(bankError)}
-                onClick={() => {
-                  send({ type: "setTeams", teamA, teamB });
-                  send({ type: "start", startTeam });
-                }}
-              >
+              <button className="btn primary wide huge-btn" type="button" onClick={startGame}>
                 開場
               </button>
             ) : (
@@ -286,25 +308,14 @@ export default function Host() {
                 </button>
               ))}
             </div>
-            <p className={bank?.ok && !bankError ? "ok" : "error"}>
-              {bankError || (bank?.ok ? "出賽題已準備" : bank?.errors.join("；"))}
-            </p>
             <p className="hint">
               改題同答案只喺 <Link to="/bank">題庫專頁</Link>，呢度唔會顯示。
             </p>
-            <button
-              className="btn primary wide huge-btn"
-              type="button"
-              disabled={!bank?.ok || Boolean(bankError)}
-              onClick={() => {
-                send({ type: "setTeams", teamA, teamB });
-                send({ type: "start", startTeam });
-                switchView("game");
-              }}
-            >
+            <button className="btn primary wide huge-btn" type="button" onClick={startGame}>
               開場
             </button>
           </section>
+          {setup.length ? <GameSetup setup={setup} onChange={setSetup} bank={bankSnap} /> : null}
         </div>
       ) : (
         <div className="play-grid">
@@ -315,7 +326,7 @@ export default function Host() {
             <Board
               room={room}
               interactive
-              onPick={(category: Category, points: Points) => send({ type: "pickCell", category, points })}
+              onPick={(cell) => send({ type: "pickCell", category: cell.category, points: cell.points, cellId: cell.id, slot: cell.slot })}
             />
           </section>
           <section className="panel controls">

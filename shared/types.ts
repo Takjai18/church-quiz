@@ -1,5 +1,5 @@
 export type Category = string;
-export type Points = 10 | 30 | 50;
+export type Points = number;
 export type Phase =
   | "lobby"
   | "board"
@@ -56,14 +56,25 @@ export interface Team {
 }
 
 export interface Cell {
+  id: string;
   category: Category;
+  slot: number;
   points: Points;
   used: boolean;
   questionId: string;
 }
 
 export interface CurrentCell {
+  cellId: string;
   category: Category;
+  slot: number;
+  points: Points;
+  questionId: string;
+}
+
+export interface GameSlot {
+  category: Category;
+  slot: number;
   points: Points;
   questionId: string;
 }
@@ -109,8 +120,9 @@ export type HostIntent =
   | { type: "setTitle"; title: string }
   | { type: "loadBank"; title?: string; questions: Question[]; categories?: CategoryDef[] }
   | { type: "setQuestionImage"; questionId: string; imageUrl: string }
+  | { type: "configureGame"; categories: CategoryDef[]; slots: GameSlot[]; questions: Question[] }
   | { type: "start"; startTeam: TeamId | "random" }
-  | { type: "pickCell"; category: Category; points: Points }
+  | { type: "pickCell"; category: Category; points: Points; cellId?: string; slot?: number }
   | { type: "judgePrimary"; correct: boolean }
   | { type: "acceptSteal" }
   | { type: "declineSteal" }

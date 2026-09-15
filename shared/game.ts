@@ -58,10 +58,12 @@ function cloneQuestions(qs: Question[]): Question[] {
 function cellsFromQuestions(questions: Question[]) {
   const cats = categoriesInQuestions(questions);
   return cats.flatMap((category) =>
-    POINT_VALUES.map((points) => {
+    POINT_VALUES.map((points, slot) => {
       const q = questions.find((x) => x.category === category && x.points === points);
       return {
+        id: `${category}-${points}`,
         category,
+        slot,
         points,
         used: false,
         questionId: q?.id ?? `${category}-${points}`,
@@ -148,6 +150,33 @@ export function applyIntent(room: RoomState, intent: HostIntent, now = Date.now(
       if (intent.title?.trim()) room.title = intent.title.trim();
       return room;
     }
+    case "configureGame": {
+      requirePhase(room, "lobby");
+      if (!intent.categories.length) throw new Error("請揀至少一種題型");
+      if (!intent.slots.length) throw new Error("請設定每種題數");
+      const qs = cloneQuestions(intent.questions);
+      const usedIds = new Set<string>();
+      const cells = intent.slots.map((s) => {
+        if (!Number.isFinite(s.points) || s.points <= 0) throw new Error("每題分數要大過 0");
+        const q = qs.find((x) => x.id === s.questionId);
+        if (!q) throw new Error("有格子未有足夠備用題，請先去題庫入題");
+        let id = `${s.category}-${s.points}`;
+        if (usedIds.has(id)) id = `${s.category}-s${s.slot}`;
+        usedIds.add(id);
+        return {
+          id,
+          category: s.category,
+          slot: s.slot,
+          points: s.points,
+          used: false,
+          questionId: s.questionId,
+        };
+      });
+      room.categories = intent.categories.map((c) => ({ ...c }));
+      room.questions = qs;
+      room.cells = cells;
+      return room;
+    }
     case "setQuestionImage": {
       requirePhase(room, "lobby");
       const q = room.questions.find((x) => x.id === intent.questionId);
@@ -157,8 +186,9 @@ export function applyIntent(room: RoomState, intent: HostIntent, now = Date.now(
     }
     case "start": {
       requirePhase(room, "lobby");
-      const v = validateBank(room.questions);
-      if (!v.ok) throw new Error(v.errors.join("；"));
+      if (!room.cells.length) throw new Error("請先設定今場題型同題數");
+      const missing = room.cells.filter((c) => !room.questions.some((q) => q.id === c.questionId));
+      if (missing.length) throw new Error("有格子未有題，請去題庫入多啲備用題");
       const start: TeamId =
         intent.startTeam === "random" ? (Math.random() < 0.5 ? "a" : "b") : intent.startTeam;
       room.turn = start;
@@ -174,17 +204,21 @@ export function applyIntent(room: RoomState, intent: HostIntent, now = Date.now(
     }
     case "pickCell": {
       requirePhase(room, "board");
-      const cell = room.cells.find(
-        (c) => c.category === intent.category && c.points === intent.points,
-      );
+      const cell = intent.cellId
+        ? room.cells.find((c) => c.id === intent.cellId)
+        : intent.slot != null
+          ? room.cells.find((c) => c.category === intent.category && c.slot === intent.slot)
+          : room.cells.find((c) => c.category === intent.category && c.points === intent.points);
       if (!cell) throw new Error("冇呢格");
       if (cell.used) throw new Error("呢格用咗");
       const q = room.questions.find((x) => x.id === cell.questionId);
       if (!q) throw new Error("搵唔到題目");
       cell.used = true;
       room.current = {
-        category: intent.category,
-        points: intent.points,
+        cellId: cell.id,
+        category: cell.category,
+        slot: cell.slot,
+        points: cell.points,
         questionId: cell.questionId,
       };
       room.phase = "primary";

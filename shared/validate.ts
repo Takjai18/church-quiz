@@ -1,7 +1,5 @@
-import { POINT_VALUES, type BankValidation, type Category, type Points, type Question } from "./types";
+import { POINT_VALUES, type BankValidation, type Category, type Question } from "./types";
 import { categoryLabel, cellKey } from "./labels";
-
-const PTS = new Set<number>(POINT_VALUES);
 
 export function normalizeQuestion(raw: unknown, index: number): Question {
   if (!raw || typeof raw !== "object") {
@@ -13,7 +11,7 @@ export function normalizeQuestion(raw: unknown, index: number): Question {
   if (!category) {
     throw new Error(`第 ${index + 1} 題缺少類別`);
   }
-  if (!PTS.has(points)) {
+  if (!Number.isFinite(points) || points <= 0) {
     throw new Error(`第 ${index + 1} 題分數無效：${q.points}`);
   }
   const accept = Array.isArray(q.accept)
@@ -27,7 +25,7 @@ export function normalizeQuestion(raw: unknown, index: number): Question {
   return {
     id: String(q.id ?? `${category}-${points}`),
     category: category as Category,
-    points: points as Points,
+    points,
     prompt,
     answer,
     accept,

@@ -1,5 +1,5 @@
-import { POINT_VALUES, type Category, type Points, type PublicRoom, type RoomState } from "../../shared/types";
-import { categoryLabel, roomCategories } from "../../shared/labels";
+import type { Cell, PublicRoom, RoomState } from "../../shared/types";
+import { roomCategories } from "../../shared/labels";
 
 export default function Board({
   room,
@@ -8,10 +8,11 @@ export default function Board({
 }: {
   room: PublicRoom | RoomState;
   interactive?: boolean;
-  onPick?: (category: Category, points: Points) => void;
+  onPick?: (cell: Cell) => void;
 }) {
   const cats = roomCategories(room);
-  const currentKey = room.current ? `${room.current.category}-${room.current.points}` : "";
+  const maxSlot = room.cells.reduce((n, c) => Math.max(n, (c.slot ?? 0) + 1), 0);
+  const currentId = room.current?.cellId || (room.current ? `${room.current.category}-${room.current.points}` : "");
   const canPick = interactive && room.phase === "board";
 
   return (
@@ -26,23 +27,29 @@ export default function Board({
           {c.label}
         </div>
       ))}
-      {POINT_VALUES.map((points) =>
+      {Array.from({ length: Math.max(maxSlot, 1) }, (_, slot) =>
         cats.map((cat) => {
-          const category = cat.id;
-          const cell = room.cells.find((x) => x.category === category && x.points === points);
-          const used = Boolean(cell?.used);
-          const key = `${category}-${points}`;
-          const active = key === currentKey;
+          const cell = room.cells.find((x) => {
+            const s = typeof x.slot === "number" ? x.slot : [10, 30, 50].indexOf(x.points);
+            return x.category === cat.id && s === slot;
+          });
+          if (!cell) {
+            return <div key={`${cat.id}-empty-${slot}`} className="cell empty" />;
+          }
+          const used = Boolean(cell.used);
+          const key = cell.id || `${cell.category}-${cell.points}`;
+          const active = key === currentId || (room.current?.category === cell.category && room.current?.points === cell.points && room.current?.slot == null);
           return (
             <button
               key={key}
               type="button"
-              data-cell={key}
-              className={`cell cat-${category} ${used ? "used" : ""} ${active ? "active" : ""}`}
+              data-cell={`${cell.category}-${cell.points}`}
+              data-cell-id={key}
+              className={`cell cat-${cell.category} ${used ? "used" : ""} ${active ? "active" : ""}`}
               disabled={!canPick || used}
-              onClick={() => canPick && !used && onPick?.(category, points)}
+              onClick={() => canPick && !used && onPick?.(cell)}
             >
-              <span className="cell-pts">{points}</span>
+              <span className="cell-pts">{cell.points}</span>
               {used && !active ? <span className="cell-done">已用</span> : null}
             </button>
           );

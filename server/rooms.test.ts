@@ -205,4 +205,34 @@ function remaining(questions: Question[], drop: Array<[Category, Points]>) {
   assert.equal(publicQuestion(q, true).answer, "66（舊約 39，新約 27）");
 }
 
+{
+  const room = createRoomState({ teamA: "甲隊", teamB: "乙隊" });
+  applyIntent(room, {
+    type: "configureGame",
+    categories: [
+      { id: "bible", label: "聖經" },
+      { id: "pun", label: "冷笑話" },
+    ],
+    slots: [
+      { category: "bible", slot: 0, points: 10, questionId: "bible-10" },
+      { category: "bible", slot: 1, points: 20, questionId: "bible-30" },
+      { category: "pun", slot: 0, points: 15, questionId: "pun-10" },
+    ],
+    questions: DEMO_QUESTIONS,
+  });
+  applyIntent(room, { type: "start", startTeam: "a" });
+  assert.equal(room.cells.length, 3);
+  applyIntent(room, { type: "pickCell", category: "bible", points: 20, slot: 1 });
+  applyIntent(room, { type: "judgePrimary", correct: true });
+  assert.equal(room.teams.a.score, 20);
+  applyIntent(room, { type: "continueReveal" });
+  applyIntent(room, { type: "pickCell", category: "pun", points: 15 });
+  applyIntent(room, { type: "judgePrimary", correct: true });
+  applyIntent(room, { type: "continueReveal" });
+  applyIntent(room, { type: "pickCell", category: "bible", points: 10 });
+  applyIntent(room, { type: "judgePrimary", correct: true });
+  applyIntent(room, { type: "continueReveal" });
+  assert.equal(room.phase, "finished");
+}
+
 console.log("rooms.test.ts ok");

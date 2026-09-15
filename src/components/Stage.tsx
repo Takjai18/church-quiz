@@ -1,4 +1,4 @@
-import type { Category, Points, PublicRoom, RoomState } from "../../shared/types";
+import type { Cell, PublicRoom, RoomState } from "../../shared/types";
 import { glowTeam, statusLine, winnerId } from "../../shared/labels";
 import Board from "./Board";
 import PromptCard from "./PromptCard";
@@ -15,7 +15,7 @@ export default function Stage({
 }: {
   room: PublicRoom | RoomState;
   interactive?: boolean;
-  onPick?: (category: Category, points: Points) => void;
+  onPick?: (cell: Cell) => void;
   showAnswer?: boolean;
   footer?: ReactNode;
   chrome?: ReactNode;
