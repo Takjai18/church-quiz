@@ -19,6 +19,12 @@ export function opponent(id: TeamId): TeamId {
   return id === "a" ? "b" : "a";
 }
 
+export function glowTeam(room: RoomState | PublicRoom, id: TeamId): boolean {
+  if (room.phase === "board" || room.phase === "primary") return room.turn === id;
+  if (room.phase === "steal_offer" || room.phase === "steal") return opponent(room.turn) === id;
+  return false;
+}
+
 export function teamName(room: RoomState | PublicRoom, id: TeamId): string {
   return room.teams[id].name;
 }

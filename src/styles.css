@@ -330,6 +330,26 @@ textarea { resize: vertical; }
   margin-top: 12px;
 }
 
+.host-page.display-page .host-bar { margin-bottom: 8px; }
+.mode-switch { display: flex; gap: 4px; }
+.judge-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--muted);
+  font-size: 22px;
+  margin: 0;
+}
+.stage-judge {
+  margin-top: 16px;
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.stage-btn {
+  min-height: 88px;
+  font-size: 40px;
+}
+
 .display-page.phone .prompt-text { font-size: 28px; }
 .display-page.phone .score-num { font-size: 56px; }
 .display-page.phone .display-body { grid-template-columns: 1fr; }

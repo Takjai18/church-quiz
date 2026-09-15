@@ -1,5 +1,16 @@
 const CODE = "church-quiz:roomCode";
 const TOKEN = "church-quiz:hostToken";
+const VIEW = "church-quiz:hostView";
+
+export type HostView = "admin" | "game";
+
+export function loadHostView(): HostView {
+  return localStorage.getItem(VIEW) === "game" ? "game" : "admin";
+}
+
+export function saveHostView(view: HostView) {
+  localStorage.setItem(VIEW, view);
+}
 
 export function saveHostSession(roomCode: string, hostToken: string) {
   localStorage.setItem(CODE, roomCode);

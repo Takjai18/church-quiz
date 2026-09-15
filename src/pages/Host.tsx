@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import Board from "../components/Board";
+import JudgeBar from "../components/JudgeBar";
 import MuteButton from "../components/MuteButton";
 import PromptCard from "../components/PromptCard";
 import Scoreboard from "../components/Scoreboard";
+import Stage from "../components/Stage";
 import Timer from "../components/Timer";
 import { getSocket } from "../lib/socket";
 import { playSfx, unlockAudio } from "../lib/sfx";
-import { clearHostSession, loadHostSession, saveHostSession } from "../lib/storage";
+import {
+  clearHostSession,
+  loadHostSession,
+  loadHostView,
+  saveHostSession,
+  saveHostView,
+  type HostView,
+} from "../lib/storage";
 import { CATEGORY_LABEL, currentQuestion, statusLine } from "../../shared/labels";
 import { parseBankJson, validateBank } from "../../shared/validate";
 import { DEMO_QUESTIONS, DEMO_TITLE } from "../../shared/game";
@@ -25,7 +34,13 @@ export default function Host() {
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
   const [bankError, setBankError] = useState("");
+  const [view, setView] = useState<HostView>(() => loadHostView());
   const lastSfx = useRef(-1);
+
+  function switchView(next: HostView) {
+    setView(next);
+    saveHostView(next);
+  }
 
   useEffect(() => {
     void fetch("/api/info")
@@ -116,26 +131,70 @@ export default function Host() {
   const timerTotal = room.phase === "steal_offer" ? 10 : 30;
 
   return (
-    <div className="page host-page" onPointerDown={unlockAudio}>
+    <div className={`page host-page ${view === "game" ? "display-page" : ""}`} onPointerDown={unlockAudio}>
       <header className="host-bar">
         <div>
-          <p className="eyebrow">主持台 · {room.title}</p>
-          <h1>房號 {room.code}</h1>
+          <p className="eyebrow">{view === "game" ? "遊戲模式" : "後台模式"} · {room.title}</p>
+          {view === "admin" ? <h1>房號 {room.code}</h1> : null}
         </div>
         <div className="host-bar-actions">
+          <div className="mode-switch" role="tablist" aria-label="主持模式">
+            <button
+              type="button"
+              className={`btn ${view === "admin" ? "primary" : "ghost"}`}
+              onClick={() => switchView("admin")}
+            >
+              後台
+            </button>
+            <button
+              type="button"
+              className={`btn ${view === "game" ? "primary" : "ghost"}`}
+              onClick={() => switchView("game")}
+            >
+              遊戲
+            </button>
+          </div>
           <MuteButton />
-          <button className="btn ghost" type="button" onClick={() => window.open(displayUrl, "_blank")}>
-            開大螢幕
-          </button>
-          <button className="btn ghost" type="button" onClick={newRoom}>
-            新開一房
-          </button>
+          {view === "admin" ? (
+            <>
+              <button className="btn ghost" type="button" onClick={() => window.open(displayUrl, "_blank")}>
+                開大螢幕
+              </button>
+              <button className="btn ghost" type="button" onClick={newRoom}>
+                新開一房
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 
-      {error ? <p className="error banner">{error}</p> : null}
+      {error && view === "admin" ? <p className="error banner">{error}</p> : null}
 
-      {room.phase === "lobby" ? (
+      {view === "game" ? (
+        <Stage
+          room={room}
+          interactive={room.phase === "board"}
+          onPick={(category, points) => send({ type: "pickCell", category, points })}
+          showAnswer={room.answerRevealed}
+          footer={
+            room.phase === "lobby" ? (
+              <button
+                className="btn primary wide huge-btn"
+                type="button"
+                disabled={!bank?.ok || Boolean(bankError)}
+                onClick={() => {
+                  send({ type: "setTeams", teamA, teamB });
+                  send({ type: "start", startTeam });
+                }}
+              >
+                開場
+              </button>
+            ) : (
+              <JudgeBar room={room} onIntent={send} />
+            )
+          }
+        />
+      ) : room.phase === "lobby" ? (
         <div className="lobby-grid">
           <section className="panel">
             <h2>房間</h2>
@@ -324,6 +383,7 @@ export default function Host() {
               onClick={() => {
                 send({ type: "setTeams", teamA, teamB });
                 send({ type: "start", startTeam });
+                switchView("game");
               }}
             >
               開場
@@ -355,42 +415,8 @@ export default function Host() {
               </div>
             ) : null}
 
+            <JudgeBar room={room} onIntent={send} compact />
             <div className="btn-grid">
-              {room.phase === "primary" ? (
-                <>
-                  <button className="btn good huge-btn" type="button" onClick={() => send({ type: "judgePrimary", correct: true })}>
-                    啱
-                  </button>
-                  <button className="btn bad huge-btn" type="button" onClick={() => send({ type: "judgePrimary", correct: false })}>
-                    錯
-                  </button>
-                </>
-              ) : null}
-              {room.phase === "steal_offer" ? (
-                <>
-                  <button className="btn good huge-btn" type="button" onClick={() => send({ type: "acceptSteal" })}>
-                    補答
-                  </button>
-                  <button className="btn warn huge-btn" type="button" onClick={() => send({ type: "declineSteal" })}>
-                    不補答
-                  </button>
-                </>
-              ) : null}
-              {room.phase === "steal" ? (
-                <>
-                  <button className="btn good huge-btn" type="button" onClick={() => send({ type: "judgeSteal", correct: true })}>
-                    補答啱
-                  </button>
-                  <button className="btn bad huge-btn" type="button" onClick={() => send({ type: "judgeSteal", correct: false })}>
-                    補答錯
-                  </button>
-                </>
-              ) : null}
-              {room.phase === "reveal" ? (
-                <button className="btn primary huge-btn" type="button" onClick={() => send({ type: "continueReveal" })}>
-                  繼續
-                </button>
-              ) : null}
               {room.phase !== "finished" && room.phase !== "board" && room.phase !== "reveal" ? (
                 <>
                   <button className="btn" type="button" onClick={() => send({ type: "revealAnswer" })}>

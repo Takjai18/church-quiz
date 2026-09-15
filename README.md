@@ -8,19 +8,19 @@
 
 | 頁面 | 網址 |
 | --- | --- |
-| 入場 | https://church-quiz.quirky-gigantoraptor.workers.dev/ |
-| 主持台 | https://church-quiz.quirky-gigantoraptor.workers.dev/host |
+| 入場 | https://church-quiz.deciduous-crayfish.workers.dev/ |
+| 主持台 | https://church-quiz.deciduous-crayfish.workers.dev/host |
 | 大螢幕 | 主持台撳「開大螢幕」，或 `/d/房號` |
 | 手機旁觀 | 掃 QR，或 `/play/房號` |
 
-例：大螢幕 `https://church-quiz.quirky-gigantoraptor.workers.dev/d/ABCD`
+例：大螢幕 `https://church-quiz.deciduous-crayfish.workers.dev/d/ABCD`
 
 ## 點玩
 
-1. 主持打開 [主持台](https://church-quiz.quirky-gigantoraptor.workers.dev/host)，設隊名，開場。
-2. 用「開大螢幕」投影去 TV。
-3. 而家輪到嗰隊大聲揀格，主持喺電腦撳嗰格。
-4. 主持用 **啱 / 錯 / 補答 / 不補答** 判題。答案只喺主持台同揭示之後先出現。
+1. 主持打開 [主持台](https://church-quiz.deciduous-crayfish.workers.dev/host)。
+2. **後台模式**：睇到答案、改隊名／題庫／圖片。
+3. 開場後會入 **遊戲模式**（投影俾大家一齊玩）：睇唔到答案，棋盤＋**啱 / 錯 / 補答 / 唔補答**。
+4. 隨時可以撳頂欄「後台／遊戲」切換。手機旁觀仍然用 `/play/房號`。
 
 規則：4 類 × 3 分值（10 / 30 / 50）共 12 格。答錯扣分，對手可以補答。補答只改分數，下一格永遠由對手揀。可以打和，分數可以負。
 
