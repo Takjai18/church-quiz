@@ -7,7 +7,7 @@ const VIEW = "church-quiz:hostView";
 export type HostView = "admin" | "game";
 
 export function loadHostView(): HostView {
-  return localStorage.getItem(VIEW) === "game" ? "game" : "admin";
+  return localStorage.getItem(VIEW) === "admin" ? "admin" : "game";
 }
 
 export function saveHostView(view: HostView) {

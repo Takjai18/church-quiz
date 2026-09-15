@@ -10,7 +10,6 @@ import Stage from "../components/Stage";
 import Timer from "../components/Timer";
 import { getSocket } from "../lib/socket";
 import { playSfx, unlockAudio } from "../lib/sfx";
-import BankEditor from "../components/BankEditor";
 import {
   clearHostSession,
   loadHostSession,
@@ -18,12 +17,10 @@ import {
   loadLocalBank,
   saveHostSession,
   saveHostView,
-  saveLocalBank,
   type HostView,
 } from "../lib/storage";
 import { currentQuestion, statusLine } from "../../shared/labels";
-import { parseBankJson, validateBank } from "../../shared/validate";
-import { DEMO_QUESTIONS, DEMO_TITLE } from "../../shared/game";
+import { validateBank } from "../../shared/validate";
 import type { Category, HostIntent, Points, Question, RoomState, TeamId } from "../../shared/types";
 
 type Info = { lan: string[]; origin: string };
@@ -34,7 +31,6 @@ export default function Host() {
   const [teamA, setTeamA] = useState("紅隊");
   const [teamB, setTeamB] = useState("藍隊");
   const [startTeam, setStartTeam] = useState<TeamId | "random">("random");
-  const [jsonText, setJsonText] = useState("");
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
   const [bankError, setBankError] = useState("");
@@ -147,42 +143,7 @@ export default function Host() {
     getSocket().emit("create", { teamA, teamB });
   }
 
-  function saveDraft(questions: Question[], title?: string) {
-    const v = validateBank(questions);
-    if (!v.ok) {
-      setBankError(v.errors.join("；"));
-      setError(v.errors.join("；"));
-      return false;
-    }
-    setBankError("");
-    setError("");
-    saveLocalBank(title || room?.title || DEMO_TITLE, questions);
-    send({ type: "loadBank", title: title || room?.title, questions });
-    return true;
-  }
 
-  async function uploadQuestionImage(questionId: string, file: File) {
-    if (!room) return;
-    const dataUrl = await readDataUrl(file);
-    const session = loadHostSession();
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Host-Token": session?.hostToken || "",
-      },
-      body: JSON.stringify({ dataUrl, roomCode: room.code }),
-    });
-    const body = await res.json();
-    if (!res.ok) {
-      setError(body.error || "上傳失敗");
-      return;
-    }
-    setDraftQs((prev) =>
-      (prev || []).map((q) => (q.id === questionId ? { ...q, imageUrl: body.url as string } : q)),
-    );
-    send({ type: "setQuestionImage", questionId, imageUrl: body.url });
-  }
 
   const bank = useMemo(
     () => (draftQs ? validateBank(draftQs) : room ? validateBank(room.questions) : null),
@@ -325,77 +286,17 @@ export default function Host() {
                 </button>
               ))}
             </div>
-          </section>
-
-          <section className="panel">
-            <h2>題庫</h2>
-            <p className="hint">
-              改呢房 12 格，或去 <Link to="/bank">題庫專頁</Link> 入備用題同揀出賽題。
-            </p>
             <p className={bank?.ok && !bankError ? "ok" : "error"}>
-              {bankError || (bank?.ok ? "12 格完整" : bank?.errors.join("；"))}
+              {bankError || (bank?.ok ? "出賽題已準備" : bank?.errors.join("；"))}
             </p>
-            {draftQs ? (
-              <BankEditor questions={draftQs} onChange={setDraftQs} onUploadImage={uploadQuestionImage} />
-            ) : null}
-            <div className="choice-row">
-              <button
-                className="btn primary"
-                type="button"
-                onClick={() => draftQs && saveDraft(draftQs)}
-              >
-                儲存題庫
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setBankError("");
-                  setError("");
-                  setDraftQs(DEMO_QUESTIONS.map((q) => ({ ...q, accept: [...q.accept] })));
-                  saveDraft(DEMO_QUESTIONS, DEMO_TITLE);
-                }}
-              >
-                用回示範題庫
-              </button>
-            </div>
-            <details className="json-fold">
-              <summary>進階：貼 JSON</summary>
-              <textarea
-                value={jsonText}
-                onChange={(e) => setJsonText(e.target.value)}
-                placeholder='{"title":"青年小組冰破","questions":[ ...12題 ]}'
-                rows={6}
-              />
-              <div className="choice-row">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => {
-                    try {
-                      const parsed = parseBankJson(jsonText);
-                      const v = validateBank(parsed.questions);
-                      if (!v.ok) {
-                        setBankError(v.errors.join("；"));
-                        return;
-                      }
-                      setDraftQs(parsed.questions);
-                      saveDraft(parsed.questions, parsed.title);
-                    } catch (err) {
-                      setBankError(err instanceof Error ? err.message : "JSON 無效");
-                    }
-                  }}
-                >
-                  套用 JSON
-                </button>
-              </div>
-            </details>
+            <p className="hint">
+              改題同答案只喺 <Link to="/bank">題庫專頁</Link>，呢度唔會顯示。
+            </p>
             <button
               className="btn primary wide huge-btn"
               type="button"
               disabled={!bank?.ok || Boolean(bankError)}
               onClick={() => {
-                if (draftQs && !saveDraft(draftQs)) return;
                 send({ type: "setTeams", teamA, teamB });
                 send({ type: "start", startTeam });
                 switchView("game");
@@ -479,13 +380,4 @@ export default function Host() {
       )}
     </div>
   );
-}
-
-function readDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
