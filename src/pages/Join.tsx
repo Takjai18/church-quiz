@@ -42,6 +42,9 @@ export default function Join() {
         <Link className="host-link" to="/host">
           我係主持，開新房
         </Link>
+        <Link className="host-link" to="/bank">
+          題庫（入題／揀題）
+        </Link>
       </div>
     </div>
   );

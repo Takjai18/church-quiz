@@ -61,6 +61,16 @@ export class QuizRoom extends DurableObject<Env> {
     return { ok: true as const, hostToken: this.hostToken, room: this.room };
   }
 
+  async applyHost(token: string, intent: HostIntent) {
+    await this.ensureLoaded();
+    if (!this.room || token !== this.hostToken) throw new Error("主持權限唔啱");
+    applyIntent(this.room, intent);
+    await this.persist();
+    await this.schedule();
+    this.broadcast();
+    return this.room;
+  }
+
   async publicSnapshot() {
     await this.ensureLoaded();
     if (!this.room || isIdle(this.room)) return null;

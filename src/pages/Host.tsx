@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import Board from "../components/Board";
 import JudgeBar from "../components/JudgeBar";
@@ -62,14 +63,28 @@ export default function Host() {
       setTeamA(payload.room.teams.a.name);
       setTeamB(payload.room.teams.b.name);
       setError("");
-      const saved = loadLocalBank();
-      if (saved && !appliedLocal.current) {
-        appliedLocal.current = true;
-        getSocket().emit("host", { type: "loadBank", title: saved.title, questions: saved.questions });
-        setDraftQs(saved.questions.map((q) => ({ ...q, accept: [...q.accept] })));
-      } else {
-        setDraftQs(payload.room.questions.map((q) => ({ ...q, accept: [...q.accept] })));
-      }
+      void (async () => {
+        if (appliedLocal.current) return;
+        try {
+          const snap = await fetch("/api/bank").then((r) => r.json());
+          if (snap.selected?.length === 12) {
+            appliedLocal.current = true;
+            getSocket().emit("host", { type: "loadBank", title: "青年小組冰破", questions: snap.selected });
+            setDraftQs(snap.selected.map((q: Question) => ({ ...q, accept: [...q.accept] })));
+            return;
+          }
+        } catch {
+          // fall through
+        }
+        const saved = loadLocalBank();
+        if (saved) {
+          appliedLocal.current = true;
+          getSocket().emit("host", { type: "loadBank", title: saved.title, questions: saved.questions });
+          setDraftQs(saved.questions.map((q) => ({ ...q, accept: [...q.accept] })));
+        } else {
+          setDraftQs(payload.room.questions.map((q) => ({ ...q, accept: [...q.accept] })));
+        }
+      })();
     };
     const onState = (next: RoomState) => {
       setRoom(next);
@@ -215,6 +230,9 @@ export default function Host() {
           <MuteButton />
           {view === "admin" ? (
             <>
+              <Link className="btn ghost" to="/bank">
+                題庫
+              </Link>
               <button className="btn ghost" type="button" onClick={() => window.open(displayUrl, "_blank")}>
                 開大螢幕
               </button>
@@ -306,7 +324,9 @@ export default function Host() {
 
           <section className="panel">
             <h2>題庫</h2>
-            <p className="hint">直接改題目、答案、題型；韓劇可以上傳劇照。儲存後呢部電腦再開新房都會用返。</p>
+            <p className="hint">
+              改呢房 12 格，或去 <Link to="/bank">題庫專頁</Link> 入備用題同揀出賽題。
+            </p>
             <p className={bank?.ok && !bankError ? "ok" : "error"}>
               {bankError || (bank?.ok ? "12 格完整" : bank?.errors.join("；"))}
             </p>

@@ -112,3 +112,9 @@ export interface BankValidation {
   errors: string[];
   missing: string[];
 }
+
+export interface BankSnapshot {
+  questions: Question[];
+  lineup: Record<string, string>;
+  selected: Question[] | null;
+}
