@@ -25,6 +25,7 @@ export default function Bank() {
   const [ok, setOk] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [sortCat, setSortCat] = useState<Category | "all">("all");
 
   async function reload() {
     const res = await fetch("/api/bank");
@@ -37,6 +38,20 @@ export default function Bank() {
   useEffect(() => {
     void reload().catch((err: Error) => setError(err.message));
   }, []);
+
+  const spareList = useMemo(() => {
+    const catOrder = new Map(CATEGORIES.map((c, i) => [c, i]));
+    const ptsOrder = new Map(POINT_VALUES.map((p, i) => [p, i]));
+    const list = [...(data?.questions || [])].sort((a, b) => {
+      const c = (catOrder.get(a.category) ?? 0) - (catOrder.get(b.category) ?? 0);
+      if (c !== 0) return c;
+      const p = (ptsOrder.get(a.points) ?? 0) - (ptsOrder.get(b.points) ?? 0);
+      if (p !== 0) return p;
+      return a.prompt.localeCompare(b.prompt, "zh-Hant");
+    });
+    if (sortCat === "all") return list;
+    return list.filter((q) => q.category === sortCat);
+  }, [data, sortCat]);
 
   const byCell = useMemo(() => {
     const map: Record<string, Question[]> = {};
@@ -267,24 +282,40 @@ export default function Bank() {
             </form>
           </section>
           <section className="panel">
-            <h2>備用題（{data?.questions.length ?? 0}）</h2>
+            <h2>備用題（{spareList.length}{sortCat === "all" ? `／${data?.questions.length ?? 0}` : ""}）</h2>
+            <label>
+              按類別
+              <select value={sortCat} onChange={(e) => setSortCat(e.target.value as Category | "all")}>
+                <option value="all">全部（聖經 → 流行曲 → 韓劇 → 冷笑話）</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ul className="bank-list">
-              {(data?.questions || []).map((q) => (
-                <li key={q.id}>
-                  <strong>
-                    {CATEGORY_LABEL[q.category]} {q.points}
-                  </strong>
-                  <span>{q.prompt}</span>
-                  <div className="choice-row">
-                    <button className="btn tiny" type="button" onClick={() => setForm({ ...q, askFor: q.askFor || "text" })}>
-                      改
-                    </button>
-                    <button className="btn tiny" type="button" onClick={() => void remove(q.id)}>
-                      刪
-                    </button>
-                  </div>
-                </li>
-              ))}
+              {spareList.map((q, i) => {
+                const prev = spareList[i - 1];
+                const showHead = sortCat === "all" && q.category !== prev?.category;
+                return (
+                  <li key={q.id}>
+                    {showHead ? <p className="spare-head">{CATEGORY_LABEL[q.category]}</p> : null}
+                    <strong>
+                      {CATEGORY_LABEL[q.category]} {q.points}
+                    </strong>
+                    <span>{q.prompt}</span>
+                    <div className="choice-row">
+                      <button className="btn tiny" type="button" onClick={() => setForm({ ...q, askFor: q.askFor || "text" })}>
+                        改
+                      </button>
+                      <button className="btn tiny" type="button" onClick={() => void remove(q.id)}>
+                        刪
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         </div>
