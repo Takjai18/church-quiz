@@ -40,18 +40,25 @@ npx wrangler dev
 
 瀏覽器開 `http://127.0.0.1:8787/host`。
 
-## 再 deploy 去 Cloudflare
+## GitHub 同 Cloudflare 會唔會自動同步？
 
-第一次喺呢部電腦 deploy，先登入你已認領嘅帳戶：
+**GitHub 有最新 code，唔等於 Cloudflare 公開網自動更新。** 要 `main` 有新 commit 先會觸發 deploy。
+
+已加 GitHub Action（`.github/workflows/deploy.yml`）：push 去 `main` 就會 build 同 deploy 去  
+https://church-quiz.deciduous-crayfish.workers.dev/
+
+第一次要喺 GitHub repo 加兩個 Secrets（Settings → Secrets and variables → Actions）：
+
+1. `CLOUDFLARE_API_TOKEN` — [開 Workers 權限嘅 API token](https://dash.cloudflare.com/profile/api-tokens)（用「Edit Cloudflare Workers」範本）
+2. `CLOUDFLARE_ACCOUNT_ID` — Cloudflare dashboard 右側 **Account ID**
+
+加完之後，之後每次 `git push origin main`（或 `npm run ship`）就會更新公開網。
+
+唔好再用 `wrangler deploy --temporary`，否則會開一條新嘅臨時網，過陣又會消失。
+
+本機手動 deploy：
 
 ```bash
 npx wrangler login
+npm run deploy
 ```
-
-之後每次更新：
-
-```bash
-npm run ship
-```
-
-會 **push 最新 code 去 GitHub**（`main`），再 build 同 deploy 去而家呢個公開網。唔好再用 `wrangler deploy --temporary`，否則會開一條新嘅臨時網，過陣又會消失。
