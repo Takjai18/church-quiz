@@ -14,8 +14,10 @@ import { playSfx, unlockAudio } from "../lib/sfx";
 import {
   clearHostSession,
   loadHostSession,
+  loadEventTitle,
   loadHostView,
   loadLocalBank,
+  saveEventTitle,
   saveHostSession,
   saveHostView,
   type HostView,
@@ -31,6 +33,7 @@ export default function Host() {
   const [error, setError] = useState("");
   const [teamA, setTeamA] = useState("紅隊");
   const [teamB, setTeamB] = useState("藍隊");
+  const [eventTitle, setEventTitle] = useState(() => loadEventTitle() || "青年小組冰破");
   const [startTeam, setStartTeam] = useState<TeamId | "random">("random");
   const [info, setInfo] = useState<Info | null>(null);
   const [copied, setCopied] = useState(false);
@@ -68,6 +71,7 @@ export default function Host() {
       setRoom(payload.room);
       setTeamA(payload.room.teams.a.name);
       setTeamB(payload.room.teams.b.name);
+      setEventTitle(loadEventTitle() || payload.room.title);
       setError("");
       if (payload.room.phase === "lobby") {
         setView("admin");
@@ -81,10 +85,11 @@ export default function Host() {
             appliedLocal.current = true;
             getSocket().emit("host", {
               type: "loadBank",
-              title: "青年小組冰破",
               questions: snap.selected,
               categories: snap.categories,
             });
+            const name = loadEventTitle();
+            if (name) getSocket().emit("host", { type: "setTitle", title: name });
             setDraftQs(snap.selected.map((q: Question) => ({ ...q, accept: [...q.accept] })));
             return;
           }
@@ -94,7 +99,9 @@ export default function Host() {
         const saved = loadLocalBank();
         if (saved) {
           appliedLocal.current = true;
-          getSocket().emit("host", { type: "loadBank", title: saved.title, questions: saved.questions });
+          getSocket().emit("host", { type: "loadBank", questions: saved.questions });
+          const name = loadEventTitle() || saved.title;
+          if (name) getSocket().emit("host", { type: "setTitle", title: name });
           setDraftQs(saved.questions.map((q) => ({ ...q, accept: [...q.accept] })));
         } else {
           setDraftQs(payload.room.questions.map((q) => ({ ...q, accept: [...q.accept] })));
@@ -105,6 +112,7 @@ export default function Host() {
       setRoom(next);
       setTeamA(next.teams.a.name);
       setTeamB(next.teams.b.name);
+      if (next.title) setEventTitle(next.title);
       if (next.phase === "lobby") {
         setDraftQs((prev) => prev ?? next.questions.map((q) => ({ ...q, accept: [...q.accept] })));
       }
@@ -150,6 +158,11 @@ export default function Host() {
   }
 
   function startGame() {
+    const name = eventTitle.trim();
+    if (name) {
+      saveEventTitle(name);
+      send({ type: "setTitle", title: name });
+    }
     send({ type: "setTeams", teamA, teamB });
     if (setup.some((c) => c.on) && bankSnap) {
       const payload = buildGamePayload(setup, bankSnap);
@@ -203,7 +216,7 @@ export default function Host() {
     <div className={`page host-page ${view === "game" ? "display-page" : ""}`} onPointerDown={unlockAudio}>
       <header className="host-bar">
         <div>
-          <p className="eyebrow">{view === "game" ? "遊戲模式" : "後台模式"} · {room.title}</p>
+          <p className="eyebrow">{room.title}</p>
           {view === "admin" ? <h1>房號 {room.code}</h1> : null}
         </div>
         <div className="host-bar-actions">
@@ -280,6 +293,26 @@ export default function Host() {
               <QRCodeSVG value={playUrl} size={168} bgColor="#f4efe4" fgColor="#0a0c10" />
               <p>手機掃碼旁觀</p>
             </div>
+            <label>
+              問答比賽名稱
+              <input
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                placeholder="例如：青年小組聖誕問答"
+              />
+            </label>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                const name = eventTitle.trim();
+                if (!name) return;
+                saveEventTitle(name);
+                send({ type: "setTitle", title: name });
+              }}
+            >
+              儲存比賽名稱
+            </button>
             <p className="hint">大螢幕網址：{displayUrl}</p>
             {lanHint.length ? (
               <p className="hint">同一 Wi-Fi 手機可用：{lanHint.map((u) => `${u}/play/${room.code}`).join(" 或 ")}</p>
@@ -330,6 +363,19 @@ export default function Host() {
             />
           </section>
           <section className="panel controls">
+            <label>
+              問答比賽名稱
+              <input
+                value={eventTitle}
+                onChange={(e) => setEventTitle(e.target.value)}
+                onBlur={() => {
+                  const name = eventTitle.trim();
+                  if (!name) return;
+                  saveEventTitle(name);
+                  send({ type: "setTitle", title: name });
+                }}
+              />
+            </label>
             <PromptCard room={room} />
             {q && room.phase !== "board" && room.phase !== "finished" ? (
               <div className="host-answer">

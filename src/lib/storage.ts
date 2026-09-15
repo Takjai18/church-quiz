@@ -3,6 +3,7 @@ import type { Question } from "../../shared/types";
 const CODE = "church-quiz:roomCode";
 const TOKEN = "church-quiz:hostToken";
 const VIEW = "church-quiz:hostView";
+const EVENT = "church-quiz:eventTitle";
 
 export type HostView = "admin" | "game";
 
@@ -12,6 +13,16 @@ export function loadHostView(): HostView {
 
 export function saveHostView(view: HostView) {
   localStorage.setItem(VIEW, view);
+}
+
+export function loadEventTitle(): string {
+  return (localStorage.getItem(EVENT) || "").trim();
+}
+
+export function saveEventTitle(title: string) {
+  const t = title.trim();
+  if (t) localStorage.setItem(EVENT, t);
+  else localStorage.removeItem(EVENT);
 }
 
 export function saveHostSession(roomCode: string, hostToken: string) {
