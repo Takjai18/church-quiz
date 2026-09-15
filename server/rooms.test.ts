@@ -202,7 +202,7 @@ function remaining(questions: Question[], drop: Array<[Category, Points]>) {
 {
   const q = DEMO_QUESTIONS.find((x) => x.id === "bible-10")!;
   assert.equal(publicQuestion(q, false).answer, undefined);
-  assert.equal(publicQuestion(q, true).answer, "加利利海");
+  assert.equal(publicQuestion(q, true).answer, "66（舊約 39，新約 27）");
 }
 
 console.log("rooms.test.ts ok");
