@@ -247,6 +247,9 @@ textarea { resize: vertical; }
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
+  width: min(960px, 100%);
+  margin-inline: auto;
+  justify-self: center;
 }
 .board-h {
   text-align: center;
@@ -381,10 +384,14 @@ textarea { resize: vertical; }
   grid-template-columns: 1.1fr 0.9fr;
   gap: 20px;
   align-items: start;
+  justify-items: center;
 }
-.display-body.board { grid-template-columns: 1fr; }
-.display-body.board .display-q { display: none; }
-.display-body.lobby .display-q,
+.display-body.board,
+.display-body.lobby {
+  grid-template-columns: 1fr;
+}
+.display-body.board .display-q,
+.display-body.lobby .display-q { display: none; }
 .display-body.finished .board { opacity: 0.55; }
 .finish-banner {
   font-family: var(--serif);
